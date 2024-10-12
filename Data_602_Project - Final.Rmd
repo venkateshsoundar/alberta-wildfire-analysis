@@ -1,0 +1,131 @@
+---
+title: "Data602_Project"
+author: "Venkateshwaran"
+date: "2024-10-11"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Forest Fire Statistical Analysis
+
+Analyse the relationship between the Fire Size against the response time ( Which is derived fields from fire start and first extinguished completely) 
+
+```{r}
+library(mosaic)
+library(dplyr)
+library(ggplot2)
+```
+
+## Approach1
+
+
+
+```{r}
+data1<-read.csv("C:/Users/Venkateshwaran/OneDrive/Desktop/Data602_Project/fp-historical-wildfire-data-2006-2023_Cleaned_Dat_2.csv")
+head(data1)
+
+data1$current_size=log10(data1$current_size)
+data1$Responsetime=log10(data1$Responsetime)
+
+
+
+result1 <- data1 %>%
+  group_by(current_size) %>%
+  summarise(
+    meanresponsetime = mean(Responsetime),
+  )
+
+ggplot(result1, aes(x=meanresponsetime, y = current_size))+
+geom_point (color = "red") +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth")+
+  labs (title = "Scatter plot of Average Response time and Average current_size",
+        x = "Response time", y ="Average current_size")
+
+model = lm(current_size ~ meanresponsetime, data = result1)
+model
+summary(model)
+
+qqnorm(model$residuals)
+qqline(model$residuals, col = "red")  # Reference line
+
+plot(model$fitted.values, model$residuals)
+abline(h = 0, col = "red")
+
+```
+
+
+### Interpretation
+
+Interpreting Model Coefficients
+It is important to understand the role of model coefficients and how to interpret them.
+𝛽1 represents the estimated change in Y per unit increase in X. 
+Depending on 𝛽𝛽̂1 being positive or negative, the change becomes increase or decrease of Y.
+B0 represent the estimated Y intercept of the regression line where it is the value of Y when X is zero.
+
+
+
+A p-value of 2.2e-16  is extremely low, indicating strong evidence against the null hypothesis. This suggests that there is a statistically significant relationship between your independent and dependent variables.
+
+### Interpretation
+Null Hypothesis (H0): There is no relationship between the Response time and Average current_size.
+Alternative Hypothesis (H1): There is a relationship between the Response time and Average current_size.
+
+Since 2.2e-16  is much less than the typical significance level of 0.05, you would reject the null hypothesis. This indicates that your independent variable has a statistically significant effect on the dependent variable.
+
+
+### Model Summary
+Formula: The model predicts current_size based on meanresponsetime.
+
+Coefficients:
+
+Intercept: -3.476
+Mean Response Time: 1.253
+This means that for every unit increase in meanresponsetime, the current_size is expected to increase by approximately 1.253 units, holding all else constant. The negative intercept suggests that if meanresponsetime were zero, the predicted current_size would be -3.476, which may not be meaningful in context.
+
+### Residuals:
+
+The range of residuals indicates variability in how well the model predictions align with actual values. The median residual is close to zero, which is a good sign, but the maximum residual of 6.0027 suggests some predictions are quite far from actual values.
+Statistical Significance
+p-values: Both the intercept and the mean response time are highly significant, with p-values less than 2e-16. This indicates strong evidence against the null hypothesis (that these coefficients are equal to zero).
+Model Fit
+Residual Standard Error: 0.8462 suggests that the typical prediction error is about 0.8462 units, which is relatively low given the context of the data.
+
+R-squared Values:
+
+Multiple R-squared: 0.5688 indicates that approximately 56.88% of the variability in current_size can be explained by meanresponsetime.
+Adjusted R-squared: 0.5685 adjusts for the number of predictors in the model and is very close to the R-squared value, suggesting that the model is fairly robust.
+F-statistic: 1953 on 1 and 1481 degrees of freedom with a p-value < 2.2e-16 indicates that the model is significantly better than a model with no predictors.
+
+Conclusions
+The model suggests a meaningful relationship between meanresponsetime and current_size, with good predictive capability as indicated by the R-squared and low residual standard error.
+
+
+
+
+
+
+
+
+Random Distribution of Residuals: Like in the earlier plot, the residuals seem randomly distributed around the horizontal red line at 
+𝑦
+=
+0
+y=0. This indicates that the model is likely a good fit, as there are no apparent patterns that would suggest the model is missing key relationships in the data.
+
+Constant Variance: The spread of residuals looks fairly consistent across different fitted values, meaning that the variance appears constant. There is no evidence of heteroscedasticity, where residuals would fan out or narrow across fitted values. This is a good sign that the assumption of homoscedasticity (equal variance) holds.
+
+Outliers: There are some points above 4 and below -2 on the y-axis, indicating a few outliers. However, they don’t seem to form a pattern, so these may not significantly affect the overall model but are still worth noting for further investigation.
+
+No Clear Patterns: There’s no discernible curve or structure in the residuals, which suggests the model is correctly capturing the relationship between the predictors and the response. A non-random pattern, like a curve, would indicate non-linearity.
+
+Conclusion:
+The model seems to fit the data reasonably well, with residuals showing no obvious signs of heteroscedasticity or non-linearity. There are a few outliers, but overall, the model assumptions seem satisfied.
+
+
+
+
