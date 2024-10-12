@@ -1,0 +1,121 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+We begin by uploading our choosen dataset, as well as ensure all appropriate libraries are uploaded.
+
+```{r}
+library(mosaic)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+fire_data<-read.csv("C:\\Users\\agelf\\Documents\\School\\U of C\\Masters of Data Science and Analytics\\Data 602\\Group Assignment\\fp-historical-wildfire-data-2006-2023.csv",header=T,na.strings=c("","NA"))
+```
+
+We can perform a few visual functions, to get an idea of the dataset itself. It is also important to note that data dictionary provided should be used to help interpret the columns based on their names, as well as what the values represent. The data dictionary can be found at <https://open.alberta.ca/dataset/a221e7a0-4f46-4be7-9c5a-e29de9a3447e/resource/1b635b8b-a937-4be4-857e-8aeef77365d2/download/fp-historical-wildfire-data-dictionary-2006-2023.pdf>.
+
+```{r}
+head(fire_data)
+```
+```{r}
+colnames(fire_data)
+```
+Based on initial inspection, we are only interested in a few columns, therefore we will create a new data frame, focusing on variables that will help examine the relationship between wind speed and fire spread rate.  We will include fuel type as well, in case we want to see if the relationship between wind speed and spread rate changes depending on what type of trees are burning
+```{r}
+fire_data_1=fire_data %>%
+  select(wind_speed,fire_spread_rate,fuel_type)
+sum(is.na(fire_data_1))
+sum(sapply(fire_data_1[c("fire_spread_rate","wind_speed")],is.na))
+#Remove rows with NA values.  We won't include fuel_type for this part, as we are not initially concerned about it.
+fire_clean=na.omit(fire_data_1[,c("wind_speed","fire_spread_rate")])
+sum(is.na(fire_clean))
+summary(fire_clean)
+```
+Based on our summary statistics, we can see that the minimum value for fire_spread_rate is -1.  This seems peculiar, and warrants a bit of further investigation, therefore we will go back to the original data set and inspect any rows where fire_spread_rate is -1.
+```{r}
+negative_fire_spread_data <- fire_data[!is.na(fire_data$fire_spread_rate) & fire_data$fire_spread_rate < 0, ]
+head(negative_fire_spread_data)
+```
+Upon visual inspection there does not seem to be any pattern related to the fire_spread_rate being -1.  Based on this, and the definition provided in the data dictionary, with fire_spread_rate being 'The rate of spread of the wildfire at the time of initial assessment, capture in metres per minute', we felt it was safe to remove these rows, as this is most likely an error with these entries.  For the fire to have a negative spread rate, would mean that the fire is retreating instead of spreading, and given that this rate of spread is a measure of how fast the fire moves from a point of origin, this seems counter intuitive to how forest fires work.  Given more time, we could reach out to the providers of the data, to try to clarify this area, but for the time being, and since there are only 6 data points, we will remove them.
+
+After we remove the rows with a fire spread rate of -1, we can plot the data for a preliminary visualization.
+```{r}
+fire_clean_no_neg=fire_clean[fire_clean['fire_spread_rate']>=0,]
+ggplot(fire_clean_no_neg, aes(x = wind_speed, y = fire_spread_rate)) +
+  geom_point(color='red',alpha = 0.5) + 
+  labs(title = "Relationship between Fire Spread Rate and Wind Speed",
+       x = "Wind Speed (kilometers per hour)",  # Replace with actual units if known
+       y = "Fire Spread Rate (metres per minute)")
+```
+Additionally, we will look at the correlation coefficient between fire_spread_rate and wind_speed.
+```{r}
+fire_corr=cor(fire_data_1,use="pairwise.complete.obs")
+```
+
+```{r}
+fire_corr=cor(fire_clean_no_neg)
+print(fire_corr)
+```
+It may also be interesting to look what happens when we include the fuel_type category.  As this variable is categorical, we will create dummy variables for fuel_type, and then run the correlation code.
+
+```{r}
+fire_data_clean_1= na.omit(fire_data_1)
+fuel_type_dummies= model.matrix(~ fuel_type - 1, data = fire_data_clean_1)
+fire_data_dummy= cbind(fire_data_clean_1[, c("fire_spread_rate", "wind_speed")], fuel_type_dummies)
+#need to remove the -1 value from fire_spread_rate again
+fire_data_dummy_clean=fire_data_dummy[fire_data_dummy['fire_spread_rate']>=0,]
+fire_corr_dummy=cor(fire_data_dummy_clean,use="pairwise.complete.obs")
+print(fire_corr_dummy)
+```
+
+The main thing this table tells us is that of all the fuel types, there is the strongest correlation between fire_spread_rate and fuel_typeC2 (boreal spruce).
+
+
+```{r}
+fire_no_neg_model=lm(fire_spread_rate ~ wind_speed, data = fire_clean_no_neg)
+
+summary(fire_no_neg_model)
+```
+Intercept):
+0.53130 The expected value of fire_spread_rate when wind_speed is zero is 0.53130.
+As our p-value is <0.05, this indicates that the intercept is statistically significant.
+
+wind_speed:
+For each additional kilometer per hour in wind_speed, the fire_spread_rate is expected to increase by approximately 0.04150 meters per minute.
+As our p-value is <0.05, this indicates that the effect of wind_speed on fire_spread_rate is statistically significant.
+
+Based on our output table, the equation for our model can be written out as, $fire\_spread\_rate = 0.53130 + (0.04150*wind\_speed)$
+Our R-squared value indicates that approximately 1.81% of the variance in fire_spread_rate is explained by wind_speed. This low value suggests that there are other factors affecting fire spread that are not included in our model.
+
+```{r}
+ggplot(fire_clean_no_neg, aes(x = wind_speed, y = fire_spread_rate)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", col = "blue") +  # Add regression line
+  labs(title = "Relationship between Fire Spread Rate and Wind Speed",
+       x = "Wind Speed (km/h)",
+       y = "Fire Spread Rate (m/min)") +
+  theme_minimal()
+```
+Residual plot:
+
+```{r}
+ggplot(data = fire_clean_no_neg, aes(x = fitted(fire_no_neg_model), y = resid(fire_no_neg_model))) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +  # Add horizontal line at 0
+  labs(title = "Residual Plot",
+       x = "Fitted Values (Fire Spread Rate)",
+       y = "Residuals") +
+  theme_minimal()
+```
+QQ plot:
+```{r}
+qqnorm(resid(fire_no_neg_model))
+qqline(resid(fire_no_neg_model), col = "red")  # Add reference line
+```
+
+
+
+
