@@ -1,0 +1,241 @@
+---
+title: "FireSpreadvsTemp"
+author: "Harpreet"
+date: "2024-10-07"
+output: pdf_document
+---
+
+Introduction
+
+:   **In this project, we explored the relationship between temperature and fire spread rate in Canada. We visualized the distribution of fire spread rate and temperature, calculated the correlation coefficient, performed a linear regression analysis, and conducted a hypothesis test to determine whether the observed relationship is statistically significant. Additionally, we created a geospatial representation of fire spread rate along with temperature to better understand the spatial patterns and relationships between these variables.**
+
+:   **The results of the hypothesis test indicate whether there is a statistically significant relationship between temperature and fire spread rate.**
+
+```{r}
+## Load dataset
+data<- read.csv(file.choose(),header=T, na.strings = c("","NA"))
+```
+
+```{r}
+# Load the ggplot2 library
+library(ggplot2)
+# Filter out rows where Fire Spread Rate is negative
+data<- data %>%
+  filter(fire_spread_rate >= 0)
+# Create a scatter plot
+ggplot(data, aes(x = fire_spread_rate, y = temperature)) + 
+  geom_point(color = "yellow", size = 2) + 
+  #geom_smooth(method = "lm", se = FALSE, color = "red")
+
+ labs(title = "Relationship between Fire Spread Rate and Temperature", 
+       x = "Fire Spread Rate", 
+       y = "Temperature") + 
+  theme_classic()
+
+```
+
+```         
+```
+
+```{r}
+# Check for missing values in Temperature and FireSpreadRate
+missing_temps <- sum(is.na(data$temperature))
+missing_fire_spread <- sum(is.na(data$fire_spread_rate))
+
+print(paste("Missing Temperature values:", missing_temps))
+print(paste("Missing Fire Spread Rate values:", missing_fire_spread))
+
+
+```
+
+```{r}
+# Check the structure of the data
+str(data)
+
+# View unique values in Temperature and FireSpreadRate
+unique(data$temperature)
+unique(data$fire_spread_rate)
+
+```
+
+```{r}
+# Remove rows with missing values
+data_clean <- data %>%
+  filter(!is.na(temperature) & !is.na(fire_spread_rate))
+    #filter(fire_spread_rate >= 0)
+
+
+# Calculate Pearson correlation coefficient on the cleaned data
+correlation <- cor(data_clean$temperature, data_clean$fire_spread_rate, use = "complete.obs")
+print(paste("Pearson correlation coefficient:", correlation))
+```
+
+```{r}
+# Perform linear regression
+model <- lm(fire_spread_rate ~ temperature, data = data)
+
+# Summarize the model
+summary(model)
+
+```
+
+```{r}
+#plot regression line.
+ggplot(data,aes(x=fire_spread_rate, y=temperature))+
+  geom_point(color="red")+stat_smooth(method="lm",formula=y~x,geom="smooth")+
+  
+ labs(title="Scatter plot of fire vs Temperature", x="Temp",y="fire") 
+```
+
+```{r}
+
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+
+# Extract coefficients and statistics
+coefficients <- as.data.frame(model_summary$coefficients)
+r_squared <- model_summary$r.squared
+adjusted_r_squared <- model_summary$adj.r.squared
+p_value <- coefficients[2, 4] # p-value for the temperature coefficient
+
+# Format coefficients table
+coefficients_table <- coefficients %>%
+  kable("html", caption = "Linear Regression Coefficients") %>%
+  kable_styling(full_width = F)
+
+# Create a summary table for R-squared and Adjusted R-squared
+model_stats <- tibble(
+  "Statistic" = c("R-squared", "Adjusted R-squared", "p-value for Temperature"),
+  "Value" = c(round(r_squared, 4), round(adjusted_r_squared, 4), round(p_value, 4))
+)
+
+# Format model statistics  table
+model_stats_table <- model_stats %>%
+  kable("html", caption = "Model Statistics") %>%
+  kable_styling(full_width = F)
+
+# Print the tables
+print(coefficients_table)
+print(model_stats_table)
+
+```
+
+```{r}
+# Step 1: Fit the linear regression model
+model <- lm(fire_spread_rate ~ temperature, data = data)
+summary(model)
+
+# Step 2: Create predictions
+# Predict on the existing dataset
+data$PredictedFireSpreadRate <- predict(model, data)
+
+# Step 3: Evaluate the model
+mse <- mean((data$fire_spread_rate - data$PredictedFireSpreadRate)^2)
+rmse <- sqrt(mse)
+print(paste("Mean Squared Error:", round(mse, 4)))
+print(paste("Root Mean Squared Error:", round(rmse, 4)))
+
+# Step 4: Plot actual vs. predicted values
+ggplot(data, aes(x = fire_spread_rate, y = PredictedFireSpreadRate)) +
+  geom_point(color = "blue") +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Actual vs. Predicted Fire Spread Rates",
+       x = "Actual Fire Spread Rate", 
+       y = "Predicted Fire Spread Rate")
+
+# Step 5: Predict for new temperature data
+new_temperature <- data.frame(temperature = 35)
+predicted_fire_spread_rate <- predict(model, newdata = new_temperature)
+print(paste("Predicted Fire Spread Rate for 35°C:", round(predicted_fire_spread_rate, 2)))
+
+```
+
+```{r}
+# Consider including other relevant features
+data$humidity <- data$relative_humidity
+data$wind_speed <- data$wind_speed
+data$vegetation_type <- data$fuel_type
+
+# Update the model to include additional features
+model <- lm(fire_spread_rate ~ temperature + humidity + wind_speed + vegetation_type, data = data)
+
+
+
+# Summarize the updated model
+summary(model)
+
+```
+
+```{r}
+str(data)
+# Create SpreadCategory based on size_class
+data$SpreadCategory <- ifelse(data$size_class %in% c("D", "E"), "High", "Low")
+
+# View the updated dataset to ensure the column is added
+#head(data)
+
+```
+
+```{r}
+# Load necessary libraries
+library(leaflet)
+
+# Assuming 'data' contains latitude and longitude columns: 'Latitude' and 'Longitude'
+# Create a leaflet map
+leaflet(data) %>%
+  addTiles() %>%
+  addCircleMarkers(~fire_location_longitude, ~fire_location_latitude,
+                   radius = ~fire_spread_rate * 0.1,  # Scale the radius by spread rate
+                   color = ~ifelse(SpreadCategory == "High", "red", "green"),  # Color by category
+                   fillOpacity = 0.5,
+                   popup = ~paste("Spread Rate:", fire_spread_rate, "<br>",
+                                  "Temperature:", temperature)) %>%
+  setView(lng = mean(data$fire_location_longitude, na.rm = TRUE), lat = mean(data$fire_location_latitude, na.rm = TRUE), zoom = 6) %>%
+  addLegend("bottomright", 
+            colors = c("red", "green"), 
+            labels = c("High Spread Rate", "Low Spread Rate"), 
+            title = "Spread Rate Category")
+
+```
+
+```{r}
+# Load necessary libraries
+library(rpart)  # For decision trees
+library(rpart.plot)  # For plotting the decision tree
+
+# Create a binary classification column based on fire spread rate
+data$SpreadCategory <- ifelse(data$fire_spread_rate > 20, "High", "Low")  # Adjust threshold as needed
+
+# Fit a decision tree model
+tree_model <- rpart(SpreadCategory ~ fire_spread_rate + temperature, data = data, method = "class")
+
+# Plot the decision tree with enhanced settings
+rpart.plot(tree_model, 
+           type = 4,           # Detailed plot
+           extra = 101,       # Show percentage of observations in each class
+           fallen.leaves = TRUE, 
+           main = "Decision Tree for Fire Spread Category")
+
+# Make predictions on the training data
+data$PredictedFireSpreadRate <- predict(tree_model, data, type = "class")
+
+# View the results
+head(data[, c("fire_spread_rate", "temperature", "SpreadCategory", "PredictedFireSpreadRate")])
+```
+
+```{r}
+# Fit a linear model
+model <- lm(fire_spread_rate ~ temperature , data = data)
+
+# Extract the p-value
+p_value <- summary(model)$coefficients[2, 4]
+
+# Print the result
+if (p_value < 0.05) {
+  print("Reject the null hypothesis. There is a statistically significant relationship between temperature and fire spread rate.")
+} else {
+  print("Fail to reject the null hypothesis. There is no statistically significant relationship between temperature and fire spread rate.")
+}
+```
