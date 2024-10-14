@@ -1,0 +1,122 @@
+---
+title: "Data 602 Project David"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+  html_notebook: default
+date: "2024-10-11"
+---
+### Approach 4
+The relationship i will be investigating is if there a potential relationship between the recorded fires size once under control and the weather that was present during the fires start. I will have uc_hectares as my dependent variable and i will use a multivariable regression with the temperature, relative humidity, and wind speed as the independent variables.
+```{r}
+library(readxl)
+data1=read_excel("C:/Users/Owner/Downloads/fp-historical-wildfire-data-2006-2023.xlsx")
+
+```
+### EDA
+```{r}
+head(data1)
+```
+
+Based off of the potential relationship i wish to investigate i will create a new data frame with the columns of interest.
+```{r}
+reg_df=data.frame(uc_hectares=data1$uc_hectares,temperature=data1$temperature,relative_humidity=data1$relative_humidity,wind_speed=data1$wind_speed)
+summary(reg_df)
+```
+Based off of the summary stats the dependent variable uc_hectares seems to be strongly skewed. To explore the data i will create histograms to display the data's distributuion.
+
+```{r}
+ggplot(data = reg_df, aes(x = uc_hectares)) +
+  geom_histogram(color='blue')
+ggplot(data = reg_df, aes(x = temperature)) +
+  geom_histogram(color='blue')
+ggplot(data = reg_df, aes(x = relative_humidity)) +
+  geom_histogram(color='blue')
+ggplot(data = reg_df, aes(x = wind_speed)) +
+  geom_histogram(color='blue')
+```
+Unsurprisingly the distribution of the uc_hectares variable is greatly skewed confirming what could be seen in the summary statistics. 
+
+### Regression Analysis
+```{r}
+reglarge=lm(formula=reg_df$uc_hectares~reg_df$temperature+reg_df$relative_humidity+reg_df$wind_speed)
+summary(reglarge)
+
+```
+To start I'll state the hypothesis test for all coefficients,
+H0: B=0 The coefficient in question is not statistically significant from 0
+H1: B!=0 The coefficient is statistically significant from 0
+
+The intercept is -279.8 hectares if all other variables are 0 which does not make sense and it is unsurprisingly not significant with a P value of 0.22 so we cannot reject the null hypothesis. The coefficient for temperature, 23.5 hectares per degree in crease in temperature has a P value of 0.00088 allowing us to state that is is significant and we can reject the null hypothesis. The coefficient for relative humidity is -5.44 hectares per %increase in humidity, with a P value of 0.062 the coefficient is not significant at the 5% level but is close. Under the stated hypothesis test we cannot reject the null hypothesis. Lastly The coefficient for wind speed is 42.5 hectares burned per 1 kilometer per hour increase. With a P value of near 0 the coefficient is significant and we can reject the null hypothesis. 
+
+With an R-squared of 0.003188 indicating the regression only explains 0.32% of variation in uc_hectares is explained by this model, this indicates that the estimated model is likely a very poor fit for the data.  
+
+```{r}
+reg_cor= round(cor(reg_df,use = "complete.obs"), 2)
+reg_cor
+```
+From the correlation matrix we can see that there is very little correlation between uc_hectares and any of the independent variables. To better visualize this i will create scatter plots with estimated models for each independent variable and uc_hectares as visualizing a multivariate regression model is difficult.
+
+```{r}
+ggplot(reg_df, aes(x=temperature, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_df, aes(x=relative_humidity, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_df, aes(x=wind_speed, y=uc_hectares)) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+```
+```{r}
+plot(lm(formula=data1$uc_hectares~data1$temperature+data1$relative_humidity+data1$wind_speed))
+```
+The plots above show that the residuals are not independent or normally distributed. The first plot shows that there are some large outliers in the data. the normality plot also shows that the the data is not normally distributed. 
+
+
+```{r}
+reg_dfalt1= filter(reg_df, between(uc_hectares,0,100))
+reglargealt1=lm(formula=reg_dfalt1$uc_hectares~reg_dfalt1$temperature+reg_dfalt1$relative_humidity+reg_dfalt1$wind_speed)
+summary(reglargealt1)
+```
+
+Filtering for smaller fires and eliminating the large outliers does make all 3 coefficients significant but the intercept is till not significant or make sense in the context of the data. with an R-squared of 0.02 also the fit of the model does improve in this case also.  
+
+```{r}
+ggplot(reg_dfalt1, aes(x=temperature, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_dfalt1, aes(x=relative_humidity, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_dfalt1, aes(x=wind_speed, y=uc_hectares)) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+```
+With the data filtered for extreme outliers there is a somewhat clearer relationship between the vast majority of fires and the weather conditions.
+
+```{r}
+plot(lm(formula=reg_dfalt1$uc_hectares~reg_dfalt1$temperature+reg_dfalt1$relative_humidity+reg_dfalt1$wind_speed))
+```
+While still not independent or normally distributed it is still a large improvement on the orriginal model with the unfiltered data.
+
+## Conclusions
+
+Overall the model with the total dataset does not fit the data well and the visualizations showed that there was almost no linear relationship between the variables and the fire size. However, once the data is filtered to remove outliers the model and the visualization showed a much better relationship between the weather and fire size. With the size of the dataset and other variables available perhaps a model linear or non linear could be built to better fit the fire size data but given the regressions above temperature, wind speed, and relative humidity alone are not enough to sufficiently explain the data while there is at least something of a relationship between them.  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
