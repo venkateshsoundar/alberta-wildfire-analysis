@@ -11,9 +11,17 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Forest Fire Statistical Analysis
+# Question 3:Analysis of Fire Size Vs Response & Extinguished Time 
 
-Analyse the relationship between the Fire Size against the response time ( Which is derived fields from fire start and first extinguished completely) 
+## Introduction
+Analyze the relationship between the Fire Size against the Response /Extinguished Time
+
+### Response Time
+Duration between the detection of a forest fire and the arrival of firefighting resources at the scene.
+
+### Extinguished Time
+Duration between the detection of a forest fire the moment when the fire is completely put out and no longer poses a threat.
+
 
 ```{r}
 library(mosaic)
@@ -21,36 +29,97 @@ library(dplyr)
 library(ggplot2)
 ```
 
-## Approach1
+## Data Cleaning and Transformation
 
+### Reading the file and converting the blank into NA
 
 ```{r}
-data1<-read.csv("C:\\Users\\agelf\\Documents\\School\\U of C\\Masters of Data Science and Analytics\\Data 602\\Group Assignment\\fp-historical-wildfire-data-2006-2023.csv",na.strings=c("","NA"))
-head(data1)
+data1<-read.csv(
+"C:\\Users\\Venkateshwaran\\OneDrive\\Desktop\\Data602_Project\\Revised_Project\\fp-historical-wildfire-data-2006-2023_rawdata.csv",
+na.strings=c("","NA"))
 ```
 
+### Step 1: Identifying the targetted Variable:
+
+Below are the list of variables which we are focusing to continue our statistical analysis for this problem statement
+
+- Fire_Size ( in Hectares)
+- fire_start_date 
+- discovered date
+- ex_fs_date -(Extinguished time)
+- assessment_datetime-(Actual Response Starts)
+
+
+### Step 2: Mapping the NA assessment_datetime,ex_fs_date
+
+Identified the blank dates with the next earliest date for fire_start_date with Discovered_date, assessment date with the arrival date in the fire control date,bh_fs_date. Main Objective of this transformation is not to eliminate the data which will be really supporting our regression
+
+
 ```{r}
-data2=data1 %>%
-  select(fire_year,fire_number,current_size,size_class,discovered_date,ex_fs_date,fire_spread_rate) %>%
-  na.omit()
+data2 <- data1 %>% 
+   mutate(discovered_date = ifelse(discovered_date == 'NA', reported_date, discovered_date),
+          ex_fs_date = ifelse(ex_fs_date == 'NA', bh_fs_date, ex_fs_date),
+          fire_start_date = ifelse(fire_start_date == 'NA', discovered_date, fire_start_date),
+          assessment_datetime = ifelse(assessment_datetime == 'NA', ia_arrival_at_fire_date, assessment_datetime),
+          discovered_date = ifelse(is.na(discovered_date), reported_date, discovered_date),
+          ex_fs_date = ifelse(is.na(ex_fs_date), bh_fs_date, ex_fs_date),
+          fire_start_date = ifelse(is.na(fire_start_date), discovered_date, fire_start_date),
+          assessment_datetime = ifelse(is.na(assessment_datetime), ia_arrival_at_fire_date, assessment_datetime))
 ```
 
+### Step 3: Converting the date variables into date format
 
 ```{r}
-data2$ex_fs_date <- as.POSIXct(data1$ex_fs_date, format = "%Y-%m-%d %H:%M", tz = "America/Edmonton")
-data2$discovered_date <- as.POSIXct(data1$discovered_date, format = "%Y-%m-%d %H:%M", tz = "America/Edmonton")
-
+data2$ex_fs_date <- as.POSIXct(data2$ex_fs_date, format = "%Y-%m-%d %H:%M:%S", tz = "America/Edmonton")
+data2$discovered_date <- as.POSIXct(data2$discovered_date, format = "%Y-%m-%d %H:%M:%S", tz = "America/Edmonton")
+data2$fire_start_date <- as.POSIXct(data2$fire_start_date, format = "%Y-%m-%d %H:%M:%S", tz = "America/Edmonton")
+data2$assessment_datetime <- as.POSIXct(data2$assessment_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "America/Edmonton")
 # Check the classes after conversion
 class(data2$ex_fs_date)
-class(data2$discovered_date)
-
-# Calculate response time in minutes
-data2$Responsetime <- as.numeric(difftime(data2$ex_fs_date, data2$discovered_date, units = "mins"))
-
+class(data2$fire_start_date)
 ```
+
+### Step 3: Calculating the response and extinguished time in minutes
+
+- Responsetime = assessment_datetime-fire_start_date
+- Exttime= ex_fs_date-fire_start_date
+
+```{r}
+# Calculate response time and ext time in minutes
+data2$Responsetime <- as.numeric(difftime(data2$assessment_datetime, data2$fire_start_date, units = "mins"))
+data2$Exttime <- as.numeric(difftime(data2$ex_fs_date, data2$fire_start_date, units = "mins"))
+```
+
+### Step 4: Logarthimic Transformation
+
+- Performed a log linear transformation on the dependent variables(current_size,Responsetime,Exttime)
+
 ```{r}
 data2$current_size=log10(data2$current_size)
 data2$Responsetime=log10(data2$Responsetime)
+data2$Exttime=log10(data2$Exttime)
+```
+
+### Step 5: Filtering Variables
+
+-Filtering Out the required variables to continue with the further regression analysis of the size and the times which we are targetting to produce the correlation.`
+
+```{r}
+data_filtered<- data2 %>%
+  select(fire_number, fire_year, current_size, Responsetime, Exttime)
+head(data_filtered)
+```
+
+### Step 6: Calulating the mean response time and extinguished time
+
+- To continue analysis of the newly derived variables and conducting analysis, we performed grouping the time with respect to the affected size and storing it into different data frames
+- result1 - (Response Time)
+- result2 - (Extinguished Time)
+
+Below are the cleaned data set which are going to be in our further regression Analysis
+
+
+```{r}
 
 result1 <- data2 %>%
   group_by(current_size) %>%
@@ -58,94 +127,156 @@ result1 <- data2 %>%
     meanresponsetime = mean(Responsetime),
   )
 
-ggplot(result1, aes(x=meanresponsetime, y = current_size))+
-geom_point (color = "red") +
-  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth")+
-  labs (title = "Scatter plot of Average Response time and Average current_size",
-        x = "Response time", y ="Average current_size")
-
-result1_clean <- result1 %>%
+result1 <- result1 %>%
   filter(!is.na(meanresponsetime), !is.infinite(meanresponsetime),
          !is.na(current_size), !is.infinite(current_size))
 
-model_clean = lm(current_size ~ meanresponsetime, data = result1_clean)
-summary(model_clean)
 
-qqnorm(model_clean$residuals)
-qqline(model_clean$residuals, col = "red")
+result2 <- data2 %>%
+  group_by(current_size) %>%
+  summarise(
+    meanExttime = mean(Exttime),
+  )%>%
+  arrange(meanExttime)
 
-plot(model_clean$fitted.values, model_clean$residuals)
-abline(h = 0, col = "red")
+result2 <- result2 %>%
+  filter(!is.na(meanExttime), !is.infinite(meanExttime),
+         !is.na(current_size), !is.infinite(current_size))
+cat("Data Frame for Response Time")
 
+head(result1)
+summary(result1)
+cat(".\n")
+cat("Data Frame for Extinquished Time")
+head(result2)
+summary(result2)
+```
+
+# Regression Analysis
+
+## Plotted the scattered plots to validate the density of the variables being analyzed
+
+```{r}
+ggplot1= (ggplot(result1, aes(x=meanresponsetime, y = current_size))+
+  geom_point (color = "red") +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth")+
+  labs (title = "Scatter plot of Average Response Time and current_size",
+        x = "Response Time", y ="Average current_size"))
+ggplot1
+```
+
+## Inference:
+-Positive linear trend. Response time increases, the current size also slightly increases, though the relationship seems weak (the slope of the line is small).
+
+-Data points (in red) are densely scattered, with many points clustering around lower response times and a current size. However, there are a few points that deviate significantly from this dense cluster, especially for higher response times and current sizes.
+
+```{r}
+ggplot2 =(ggplot(result2, aes(x=meanExttime, y = current_size))+
+  geom_point (color = "red") +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth")+
+  labs (title = "Scatter plot of Average Extinguished time and Average current_size",
+        x = "Extinguished time", y ="Average current_size"))
+ggplot2
+```
+## *Inference:*
+
+-Strong Positive Trend
+-Slope of the line is noticeably steeper compared to the response time plot, indicating that changes in extinguished time have a more pronounced effect on the average current size.
+
+
+
+# Generating Models and Intreprating the Model Summary with Hypothesis Test
+
+### Mean Response Time
+
+-Null Hypothesis (H0): There is no relationship between the Response time and Average current_size.
+-Alternative Hypothesis (Ha): There is a relationship between the Response time and Average current_size.
+
+```{r}
+model_clean1 = lm(current_size ~ meanresponsetime, data = result1)
+summary(model_clean1)
+```
+
+## Interpretation: 
+p-value of 0.03362 relationship between meanresponsetime and current_size is statistically significant at the 5% significance level (p < 0.05)
+
+## Model Fit: 
+R-squared value of 0.002397 indicates a Low Fit.
+
+
+
+### Extinquished Time
+
+-Null Hypothesis (H0): There is no relationship between the Extinguished time and Average current_size.
+-Alternative Hypothesis (Ha): There is a relationship between the Extinguished time and Average current_size.
+
+```{r}
+model_clean2 = lm(current_size ~ meanExttime, data = result2)
+summary(model_clean2)
 ```
 
 
-### Interpretation
+## Interpretation:
+p-value of 2.2e-16  is extremely low, indicating strong evidence against the null hypothesis means that Response time has significant effect on the Size of the forest impact
 
-Interpreting Model Coefficients
-It is important to understand the role of model coefficients and how to interpret them.
-𝛽1 represents the estimated change in Y per unit increase in X. 
-Depending on 𝛽𝛽̂1 being positive or negative, the change becomes increase or decrease of Y.
-B0 represent the estimated Y intercept of the regression line where it is the value of Y when X is zero.
+## Model Fit:  
+R-squared: 0.5386 of the variance in current_size which indicates a moderate fit
 
 
 
-A p-value of 2.2e-16  is extremely low, indicating strong evidence against the null hypothesis. This suggests that there is a statistically significant relationship between your independent and dependent variables.
+# Analyzing the Normal Distribution - QQ Plot for Response Time
 
-### Interpretation
-Null Hypothesis (H0): There is no relationship between the Response time and Average current_size.
-Alternative Hypothesis (H1): There is a relationship between the Response time and Average current_size.
-
-Since 2.2e-16  is much less than the typical significance level of 0.05, you would reject the null hypothesis. This indicates that your independent variable has a statistically significant effect on the dependent variable.
-
-
-### Model Summary
-Formula: The model predicts current_size based on meanresponsetime.
-
-Coefficients:
-
-Intercept: -3.476
-Mean Response Time: 1.253
-This means that for every unit increase in meanresponsetime, the current_size is expected to increase by approximately 1.253 units, holding all else constant. The negative intercept suggests that if meanresponsetime were zero, the predicted current_size would be -3.476, which may not be meaningful in context.
-
-### Residuals:
-
-The range of residuals indicates variability in how well the model predictions align with actual values. The median residual is close to zero, which is a good sign, but the maximum residual of 6.0027 suggests some predictions are quite far from actual values.
-Statistical Significance
-p-values: Both the intercept and the mean response time are highly significant, with p-values less than 2e-16. This indicates strong evidence against the null hypothesis (that these coefficients are equal to zero).
-Model Fit
-Residual Standard Error: 0.8462 suggests that the typical prediction error is about 0.8462 units, which is relatively low given the context of the data.
-
-R-squared Values:
-
-Multiple R-squared: 0.5688 indicates that approximately 56.88% of the variability in current_size can be explained by meanresponsetime.
-Adjusted R-squared: 0.5685 adjusts for the number of predictors in the model and is very close to the R-squared value, suggesting that the model is fairly robust.
-F-statistic: 1953 on 1 and 1481 degrees of freedom with a p-value < 2.2e-16 indicates that the model is significantly better than a model with no predictors.
-
-Conclusions
-The model suggests a meaningful relationship between meanresponsetime and current_size, with good predictive capability as indicated by the R-squared and low residual standard error.
+```{r}
+qqnorm(model_clean1$residuals)
+qqline(model_clean1$residuals, col = "red")
+```
+## Interpretation: 
+- Model appears to follow a normal distribution reasonably well. 
+- Some deviations at the extreme ends (in the tails) may indicate slight departures from normality, possibly showing mild outliers or heavier tails than a normal distribution
 
 
 
+# Analyzing the Normal Distribution - QQ Plot for Extinquished Time
+
+```{r}
+qqnorm(model_clean2$residuals)
+qqline(model_clean2$residuals, col = "red")
+```
+
+## Interpretation:
+
+- Model is approximately normal
+- Model may have heavier tails or more extreme values than would be expected in a normal distribution- When the extinguished time increases there will be huge impact on the affected area
+
+
+# Analyzing the Normal Distribution - Residual Plot for Response Time
+
+```{r}
+plot(model_clean1$fitted.values, model_clean1$residuals)
+abline(h = 0, col = "red")
+```
+## Inference:
+-Residuals seem to be randomly scattered around the horizontal line at zero though there are many outliers in the data set
 
 
 
+# Analyzing the Normal Distribution - Residual Plot for Extinguished Time
+
+```{r}
+plot(model_clean2$fitted.values, model_clean2$residuals)
+abline(h = 0, col = "red")
+```
+## Inference:
+-Residuals are centered around zero, which is a good sign for a well-fitted model and  shows the strong relationship between time and size
 
 
-Random Distribution of Residuals: Like in the earlier plot, the residuals seem randomly distributed around the horizontal red line at 
-𝑦
-=
-0
-y=0. This indicates that the model is likely a good fit, as there are no apparent patterns that would suggest the model is missing key relationships in the data.
 
-Constant Variance: The spread of residuals looks fairly consistent across different fitted values, meaning that the variance appears constant. There is no evidence of heteroscedasticity, where residuals would fan out or narrow across fitted values. This is a good sign that the assumption of homoscedasticity (equal variance) holds.
+# Conclusion
 
-Outliers: There are some points above 4 and below -2 on the y-axis, indicating a few outliers. However, they don’t seem to form a pattern, so these may not significantly affect the overall model but are still worth noting for further investigation.
-
-No Clear Patterns: There’s no discernible curve or structure in the residuals, which suggests the model is correctly capturing the relationship between the predictors and the response. A non-random pattern, like a curve, would indicate non-linearity.
-
-Conclusion:
-The model seems to fit the data reasonably well, with residuals showing no obvious signs of heteroscedasticity or non-linearity. There are a few outliers, but overall, the model assumptions seem satisfied.
+-Overall, Models of Response and Extinguished time has a significant relationship between the affected area - size.
+-However, the Extinguished Time Model which shows the strong relationship with the relatively low p-value
+-Hence improving the Response and extinguished time of a forest fire involving with following strategies ideally impact the size of the forest being affected
+-Early detection,Rapid response,Effective firefighting techniques,Training and Coordination & Public awareness 
 
 
 
