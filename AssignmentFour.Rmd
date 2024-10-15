@@ -1,0 +1,424 @@
+---
+title: "Data 602 - Assignment Four"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+
+Ensure you justify all computation and data visualizations with
+accompanying code. </br> </br>
+
+**1.** A pharmaceutical company conducted an experiment to compare the
+mean amount of time (in days) necessary for a patient to recover from
+the effects and complications that follow the onset of the common cold.
+In this experiment, thirty-one healthy females between the ages of 25
+and 34 years of age were randomly divided into two groups.
+
+In the first group, $n_{VitC} = 15$ females received a daily dose of 500
+milligrams of Vitamin C. The second group consisted of
+$n_{Placebo} = 16$ females, each of which was given a *placebo*, or
+rather a "fake" Vitamin C tablet. The recovery time - the time until the
+common cold symptoms had disappeared - for each of the thirty-one
+females was observed (in days). The data are provided below.
+
+**Received 500 mgs of Vitamin C:** 6, 7, 7, 7, 8, 7, 7, 8, 7, 8, 10, 6,
+8, 5, 6
+
+**Received a placebo:** 10, 12, 8, 6, 9, 8, 11, 9, 11, 8, 12, 11, 9, 8,
+10, 9
+
+(a) Do these data indicate that the recovery time is quicker with
+    Vitamin C than without? Carry out the appropriate statistical
+    investigation with a permutation test. Ensure you show "where" your
+    permutation test statistic lies on the distribution. Report your
+    (empirical) $P$-value and your statistical inference. For the number
+    of permutation tests, use 2999.
+
+    ```{r}
+    # Received 500 mgs of Vitamin C
+    vit_c <- c(6, 7, 7, 7, 8, 7, 7, 8, 7, 8, 10, 6, 8, 5, 6)
+
+    # Received a placebo
+    placebo <- c(10, 12, 8, 6, 9, 8, 11, 9, 11, 8, 12, 11, 9, 8, 10, 9)
+
+    # Calculate observed difference in mean recovery times
+    diff <- mean(vit_c) - mean(placebo)
+    print(paste("Observed difference in mean recovery times:", diff))
+
+    # Combined
+    both <- c(vit_c, placebo)
+
+    #2999 permutations
+    set.seed(123)  
+    perm_diffs <- numeric(2999)
+    for (i in 1:2999) {
+      
+      vit_c_perm <- sample(both, 15)
+      placebo_perm <- setdiff(both, vit_c_perm)
+      
+      # Calculate difference in mean recovery times for this permutation
+      perm_diff <- mean(vit_c_perm) - mean(placebo_perm)
+      perm_diffs[i] <- perm_diff
+    }
+
+    # Calculate empirical P-value
+    p_value <- mean(perm_diffs <= diff)
+    print(paste("P-value:", p_value))
+    ```
+
+(b) Re-test your statistical hypothesis in part (a) using the $t$-test.
+    In doing so, state any assumptions about these data or conditions
+    you are imposing on these data and conduct the necessary diagnostics
+    to either confirm or refute such assumptions. Ensure you provide
+    both the $P$-value and its interpretation related to these data.
+
+    ```{r}
+    # Perform t-test
+    t_stat <- t.test(vit_c, placebo)$statistic
+    t_p <- t.test(vit_c, placebo)$p.value
+    print(paste("t-test statistic:", t_stat))
+    print(paste("t-test P-value:", t_p))
+
+    ```
+
+</br>
+
+**2.** A group of patients with a binge-eating disorder were randomly
+assigned to take either the experimental drug fluvoxamine or the placebo
+in a nine-week-long, double-blinded clinical trial. At the end of the
+trial the condition of each patient was classified into one of four
+categories: no response, moderate response, marked response, or
+remission. The table below shows a cross-classification, or contingency
+table, of these data. $$
+\begin{array}{lcccc}
+             & \text{No Response}  & \text{Moderate Response}  & \text{Marked Response}  & \text{Remission}  \\
+             \hline
+\text{Fluvoxamine}  &   15         &     7                     &    3                    &   15              \\
+\text{Placebo}      &   22         &     7                     &    3                    &   11              \\
+\end{array}
+$$
+
+Do these data provide statistically significant evidence to conclude
+that there is an association between the type of treatment received and
+a patient's response?
+
+Answer
+
+-   Null hypothesis  no relation between the type of treatment
+    received and a patient's response.
+
+-   Alternative hypothesis Relation between the type of treatment
+    received and a patient's response.
+
+    ```{r}
+
+    df <- data.frame(treatment = c(rep("Fluvoxamine", 40), rep("Placebo", 43)),
+                     response = c(rep("No Response", 15), rep("Moderate Response", 7), rep("Marked Response", 3), rep("Remission", 15),
+                                  rep("No Response", 22), rep("Moderate Response", 7), rep("Marked Response", 3), rep("Remission", 11)))
+
+    table <- table(df$treatment, df$response)
+    table
+    ```
+
+    ```{r}
+    # Perform the chi-squared test
+    chisq_test_result <- chisq.test(table)
+    # in above line of code i had " Warning in chisq.test(table) :Chi-squared approximation may be incorrect--- so stimulate the p value"
+    chisq_test_result
+
+    ```
+
+    ```{r}
+    # to have the exact p value fissher is used 
+    fisher.test(table)
+    ```
+
+</br>
+
+**3.** A study conducted by Youmans and
+Jee[1](Fudging%20the%20Numbers:%20Distributing%20Chocolate%20Influences%20Student)
+looked at students who took a research methods class in psychology. Two
+lecture sections of the same course were taught by the same instructor.
+Students in each lecture section were required to register in one of two
+Friday afternoon discussion sections, or a tutorial. During the ninth
+week of instruction, all students were asked to fill out an informal
+midsemester evaluation in their Friday afternoon discussion session.
+
+```         
+Evaluations in an Undergraduate Course, *Teaching of Psychology*,
+Volume 34, Number 7, pgs.45 - 247, 2007.
+```
+
+In half of the Friday afternoon discussion sections, the experimenter
+(not the professor/instructor!) passed around a bag containing small
+bars of chocolate that he simply had 'left-over' and 'wanted to get rid
+of' so that students would not think the chocolate was a gift from their
+professor/instructor. The evaluation was a survey that contained nine
+questions. For each question the student provided a rating from 1 (very
+poor) to 5 (excellent).
+
+Question 9 posed the following:
+
+</br>
+
+<center>**Compared to other instructors you have had at this university,
+this instrutor is:'' 1 (very poor) to 5 (excellent)**</center>
+
+</br>
+
+Compliments to the authors, they have provided me with the data in this
+particular study. In the
+[file](https://github.com/Statman44/Data602/blob/main/chocnochocratings.csv)
+you will find the raw data providing the student responses for Question
+9 (**Q9**) and the overall average response for Questions 1 through 9
+(**Overall**) for each student. *Note: To easily read this into your R
+session, select the "Raw" button prior, then use the resulting URL.*
+
+(a) Pertaining to Question 9: Do these data suggest there is a treatment
+    effect? Test the existence of a treatment effect using a permutation
+    test. If a treatment effect is discovered, explain its meaning in
+    the context of these data. Carry out a permutation test, using 1999
+    iterations.\
+    </br> (You will have to carefully consider "what a treatment effect"
+    is in this scenario.)
+
+    ```{r}
+    # carring out teh permuation test using 1999 iterations.
+    ## Load dataset
+    data<- read.csv(file.choose(),header=T, na.strings = c("","NA"))
+    head(data)
+    ```
+
+    ```{r}
+    names(data)
+    ```
+
+    ```{r}
+    chocolate <- data$Q9[data$GroupName == "Chocolate"]
+    No_chocolate <- data$Q9[data$GroupName == "NOChoc"]
+
+    #difference in means
+    diff <- mean(chocolate, na.rm= TRUE) - mean(No_chocolate, na.rm= TRUE)
+    diff
+
+    set.seed(123) 
+    permutation_diff <- replicate(1999, diff(sample(data$Q9)), simplify = FALSE)
+
+
+    p_value <- sum(abs(unlist(permutation_diff)) >= abs(diff)) / 1999
+
+    # Compare the p-value
+    if (p_value < 0.05) {
+      cat("Reject the null hypothesis.\n")
+    } else {
+      cat("Fail to reject the null hypothesis.\n")
+    }
+
+    # Print the p-value
+    cat("p-value:", p_value, "\n")
+    ```
+
+(b) Consider the variable **Overall**. Is there a treatment effect with
+    respect to the professor's overall rating as a teacher? Apply the
+    $t$-test to these data. Interpret the meaning of the $P$-value.
+
+    ```{r}
+
+    Overall_Chocolate <- data$Overall[data$GroupName == "Chocolate"]
+    Overall_NOChoc <- data$Overall[data$GroupName == "NOChoc"]
+
+    # Perform the two-sample t-test
+    t_test_result <- t.test(Overall_Chocolate, Overall_NOChoc)
+
+    # Print the t-test result
+    print(t_test_result)
+    ```
+
+(c) Consider the test suggested in part (a). Why would a $t$-test not be
+    a recommended statistical method to carry out the test in part (a)?
+    Explain your answer in a few sentences
+
+    **Answer:**
+
+    **The permutation test is specifically designed to test for
+    differences in means between two groups, making it a more suitable
+    choice for this particular problem.**
+
+</br> </br>
+
+**4.** The Capital Asset Price Model (CAPM) is a financial model that
+attempts to predict the rate of return on a financial instrument, such
+as a common stock, in such a way that it is linearly related to the rate
+of return on the overal market. Specifically
+
+$$
+R_{StockA,i} = \beta_{0} + \beta_{1}R_{Market, i} + e_{i}   
+$$
+
+(Note: To align the notation with a stock's \`\`beta'', $\beta_{0} = A$
+and $\beta_{1} = B$)
+
+You are to study the relationship between the two variables and estimate
+the above model:
+
+$R_{SUNCOR, i}$ - rate of return on Stock A for month $i$,
+$i = 1, 2, \cdots, 59$.
+
+$R_{Market, i}$ - market rate of return for month $i$,
+$i = 1, 2, \cdots, 59$.
+
+$\beta_{1}$ represent's the stocks \`beta' value, or its *systematic
+risk*. It measure's the stocks volatility related to the market
+volatility. $\beta_{0}$ represents the risk-free interest rate.
+
+The data appeaing in the
+[file](https://github.com/Statman44/Data602/blob/main/bondsdata.csv)
+contains the data on Suncor's rate of return and the Toronto Composite
+Index rate of return for 59 randomly selected months.
+
+Therefore $R_{SUNCOR, i}$ represents the monthly rate of return for a
+common share of Suncor stock; $R_{TSE, i}$ represents the monthly rate
+of return (increase or decrease) of the TSE Index for the same month,
+month $i$. The first column in this data file contains the monthly rate
+of return on Suncor stock; the second column contains the monthly rate
+of return on the TSE index for the *same month*.
+
+Read this data into R Studio and answer the questions posed below.
+
+```{r}
+capmdata.df = read.csv("https://raw.githubusercontent.com/Statman44/Data602/main/capm.csv")
+head(campdata.df, 3) 
+```
+
+(a) Appropriately visualize these data. What can you infer from this
+    visualization? Provide a brief commentary.
+
+(b) Estimate the model above.
+
+(c) In the context of these data, interpret the meaning of your
+    estimates of the estimates $\widehat{\beta}_{0}$ and
+    $\widehat{\beta}_{1}$, in the context of these data.
+
+(d) Refer to your answer in (b) In a certain month, the rate of return
+    on the TSE Index was 4%. Predict the rate of return on Suncor stock
+    for the same month.
+
+(e) Think about the conditions of this model *in the context* of these
+    data. Create the visualizations that inspect each of the two
+    conditions and provide commentary that addresses the validity (or
+    invalidity) of each.
+
+(f) From these data, can you infer that the monthly rate of return of
+    Suncor stock can be expressed as a positive linear function of the
+    monthly rate of return of the TSE Index? State your statistical
+    hypotheses, compute (and report) both the test statistic and the
+    $P$-value and provide your decision.
+
+(g) Compute a 95% confidence interval for $\beta_{1}$, then interpret
+    its meaning in the context of these data.
+
+(h) Compute a 95% confidence interval for the mean monthly rate of
+    return of Suncor stock when the TSE has a monthly rate of return of
+    3%.
+
+(i) In a month of September, the TSE Index had a rate of return of
+    1.16%. With 95% confidence, compute the September rate of return for
+    Suncor stock.
+
+(j) Recall the Bootstrap Method. From these data, use the bootstrap
+    method to create a 95% confidence interval for mean monthly rate of
+    return of Suncor stock when the TSE has a monthly rate of return of
+    3%. Compare your result to your result in part (h). Use 1000
+    iterations for your bootstrap. *Carefully* consider how you would
+    resample bivariate data points $(x_{TSE, i}, y_{Suncor, i})$.
+
+</br> </br>
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(boot)
+
+capmdata.df <- read.csv("https://raw.githubusercontent.com/Statman44/Data602/main/capm.csv")
+head(capmdata.df, 3)
+
+
+
+
+```
+
+```{r}
+colnames(capmdata.df) <- c("Suncor_Return", "TSE_Return")
+ggplot(capmdata.df, aes(x = TSE_Return, y = Suncor_Return)) +
+  geom_point(color = 'blue') +
+  geom_smooth(method = "lm", col = "red", se = FALSE) +
+  labs(title = "Suncor Stock Return vs TSE Index Return",
+       x = "TSE Index Return (%)",
+       y = "Suncor Stock Return (%)")
+
+
+### 2. Estimate the Model
+capm_model <- lm(Suncor_Return ~ TSE_Return, data = capmdata.df)
+summary(capm_model)
+
+predict_return <- predict(capm_model, newdata = data.frame(TSE_Return = 0.04))
+cat("Predicted Suncor stock return for a TSE return of 4%:", predict_return, "\n")
+
+ggplot(capm_model, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, col = "red") +
+  labs(title = "Residuals vs Fitted Values",
+       x = "Fitted Values",
+       y = "Residuals")
+
+# Normal Q-Q Plot (for checking normality of residuals)
+ggplot(capm_model, aes(sample = .stdresid)) +
+  stat_qq() +
+  stat_qq_line(col = "red") +
+  labs(title = "Normal Q-Q Plot of Residuals")
+
+
+
+# Test statistic and p-value are available from the model summary
+cat("Test statistic (t-value for beta_1):", summary(capm_model)$coefficients[2, "t value"], "\n")
+cat("P-value:", summary(capm_model)$coefficients[2, "Pr(>|t|)"], "\n")
+
+
+
+### 6. 95% Confidence Interval for beta_1 ###
+confint(capm_model, "TSE_Return", level = 0.95)
+
+
+
+### 7. 95% CI for Mean Suncor Return when TSE Return = 3% ###
+newdata <- data.frame(TSE_Return = 0.03)
+predict(capm_model, newdata, interval = "confidence", level = 0.95)
+
+
+### 8. 95% CI for September (TSE Return = 1.16%) ###
+newdata_september <- data.frame(TSE_Return = 0.0116)
+predict(capm_model, newdata_september, interval = "confidence", level = 0.95)
+
+
+### 9. Bootstrap for 95% CI when TSE Return = 3% ###
+# Bootstrap function for resampling
+boot_fn <- function(data, indices) {
+  boot_data <- data[indices, ]
+  boot_model <- lm(Suncor_Return ~ TSE_Return, data = boot_data)
+  predict(boot_model, newdata = data.frame(TSE_Return = 0.03))
+}
+
+# Perform bootstrap with 1000 iterations
+set.seed(123)
+bootstrap_results <- boot(capmdata.df, statistic = boot_fn, R = 1000)
+
+# Calculate 95% confidence interval using bootstrap results
+boot.ci(bootstrap_results, type = "perc")
+
+```
