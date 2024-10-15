@@ -1,0 +1,746 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+## Introduction
+
+Wildfires in Canada are a significant threat to ecosystems, human safety, and property, necessitating a comprehensive understanding of the factors that influence their behavior. Although the prevalence of forest fires varies year to year, there has been an observed trend over the past years indicating an overall increase in the occurence of forest fires.  There is also evidence of an increase in severe forest fires in recent years, compared to the last few decades^1^.
+
+Part of our motivation for our questions is aimed towards looking at predicting the size and spread rate of fires. The 2023 and 2024 fire seasons have been some of the worst on record in terms of area burned. Being able to predict wildfire sizes may help in allocations of resources to fight fires. As instances such as Fort McMurray and Jasper become more common with populated areas finding themselves in the way of these fires understanding spread rates of fires may be important to inform evacuation decisions and keep more people safe.
+
+The main objective of our project is to examine multiple variables related to forest fires, to determine if they reduce or increase the severity of forest fires. Based on this information we can make suggestions to help decrease the increasing threats of forest fires.
+
+## Objective Questions
+To answer our main objective, we examine four main questions:
+
+1. Explore the relationship between wind speed and fire spread rate. Understanding this relationship can inform firefighting strategies and preparedness efforts.
+
+2. Examine the relationship between temperature and fire spread rate. Analyzing this relationship will provide insights into how varying temperature levels affect wildfire behavior.
+
+3. Examine the relationship between temperature and fire spread rate. Analyzing this relationship will provide insights into how varying temperature levels affect wildfire behavior.
+
+4. Examine whether fire size relates to the weather conditions when the fire starts.
+
+Before any analyses, we want to make sure to load all appropriate libraries, as well as the data set.
+```{r}
+library(mosaic)
+library(dplyr)
+library(ggplot2)
+library(e1071)
+library(leaflet)
+```
+```{r}
+fire_data<-read.csv("https://raw.githubusercontent.com/aarongelf/data602-data/refs/heads/main/fp-historical-wildfire-data-2006-2023.csv",header=T,na.strings=c("","NA"))
+#We have also include the dataset in our submission, in case there is an error accessing the URL.
+```
+
+### Question 1 - What is the Relationship Between Wind Speed and Fire Spread Rate
+
+To examine the relationship between wind speed and fire spread rate, we can perform a few visual functions, to get an idea of the dataset itself. It is also important to note that data dictionary provided should be used to help interpret the columns based on their names, as well as what the values represent. The data dictionary can be found at
+<https://open.alberta.ca/dataset/a221e7a0-4f46-4be7-9c5a-e29de9a3447e/resource/1b635b8b-a937-4be4-857e-8aeef77365d2/download/fp-historical-wildfire-data-dictionary-2006-2023.pdf>.
+
+```{r}
+head(fire_data)
+```
+
+```{r}
+colnames(fire_data)
+```
+
+Based on initial inspection, we are only interested in a few columns, therefore we will create a new data frame, focusing on variables that will help examine the relationship between wind speed and fire spread rate.
+```{r}
+fire_data_1=fire_data %>%
+  select(wind_speed,fire_spread_rate)
+sum(is.na(fire_data_1))
+sum(sapply(fire_data_1[c("fire_spread_rate","wind_speed")],is.na))
+#Remove rows with NA values.  We won't include fuel_type for this part, as we are not initially concerned about it.
+fire_clean=na.omit(fire_data_1[,c("wind_speed","fire_spread_rate")])
+sum(is.na(fire_clean))
+summary(fire_clean)
+```
+
+Based on our summary statistics, we can see that the minimum value for fire_spread_rate is -1.  This seems peculiar, and warrants a bit of further investigation, therefore we will go back to the original data set and inspect any rows where fire_spread_rate is -1.
+```{r}
+negative_fire_spread_data <- fire_data[!is.na(fire_data$fire_spread_rate) & fire_data$fire_spread_rate < 0, ]
+head(negative_fire_spread_data)
+```
+
+Upon visual inspection there does not seem to be any pattern related to the fire_spread_rate being -1.  Based on this, and the definition provided in the data dictionary, with fire_spread_rate being 'The rate of spread of the wildfire at the time of initial assessment, capture in metres per minute', we felt it was safe to remove these rows, as this is most likely an error with these entries.  For the fire to have a negative spread rate, would mean that the fire is retreating instead of spreading, and given that this rate of spread is a measure of how fast the fire moves from a point of origin, this seems counter intuitive to how forest fires work.  Given more time, we could reach out to the providers of the data, to try to clarify this area, but for the time being, and since there are only 6 data points, we will remove them.
+
+After we remove the rows with a fire spread rate of -1, we can plot the data for a preliminary visualization.
+```{r}
+fire_clean_no_neg=fire_clean[fire_clean['fire_spread_rate']>=0,]
+ggplot(fire_clean_no_neg, aes(x = fire_spread_rate)) +
+  geom_histogram(color='red',fill='red')
+
+```
+Based on our histogram, we can see that the data for fire_spread_rate is heavily skewed.
+
+```{r}
+fire_clean_no_neg=fire_clean[fire_clean['fire_spread_rate']>=0,]
+ggplot(fire_clean_no_neg, aes(x = wind_speed, y = fire_spread_rate)) +
+  geom_point(color='red',alpha = 0.5) + 
+  labs(title = "Relationship between Fire Spread Rate and Wind Speed",
+       x = "Wind Speed (kilometers per hour)",  # Replace with actual units if known
+       y = "Fire Spread Rate (metres per minute)")
+```
+Initial inspection of the scatterplot is difficult to arrive to any meaningful conclusion without further analysis.
+
+Additionally, we will look at the correlation coefficient between fire_spread_rate and wind_speed.
+```{r}
+fire_corr=cor(fire_clean_no_neg,use="pairwise.complete.obs")
+print(fire_corr)
+```
+Based on our output we can see a very weak positive relationship between fire spread rate and wind speed.
+
+```{r}
+fire_no_neg_model=lm(fire_spread_rate ~ wind_speed, data = fire_clean_no_neg)
+
+summary(fire_no_neg_model)
+```
+Intercept:
+The expected value of fire_spread_rate when wind_speed is zero is 0.53130.
+As our p-value is <0.05, this indicates that we can reject the $H_0$ that $\beta_0$=0. Therefore, we accept the $H_1$ that $\beta_0 \neq 0$ and conclude that the intercept is statistically significant.
+
+Slope:
+For each additional kilometer per hour in wind_speed, the fire_spread_rate is expected to increase by approximately 0.04150 meters per minute.
+As our p-value is <0.05, this indicates that we can reject the $H_0$ that $\beta_1$=0.  Therefore, we accept the $H_1$ that $\beta_1 \neq 0$ and conclude that there is a significant relationship between wind_speed and fire_spread_rate.
+
+Based on our output table, the equation for our model can be written out as, $fire\_spread\_rate = 0.53130 + (0.04150*wind\_speed)$
+
+Our R-squared value indicates that approximately 1.81% of the variance in fire_spread_rate is explained by wind_speed. This low value suggests that there are other factors affecting fire spread that are not included in our model.
+
+We can plot this model using the following code:
+```{r}
+ggplot(fire_clean_no_neg, aes(x = wind_speed, y = fire_spread_rate)) +
+  geom_point(alpha = 0.5,color='red') +
+  stat_smooth(method = "lm", formula = y~x) +  # Add regression line
+  labs(title = "Relationship between Fire Spread Rate and Wind Speed",
+       x = "Wind Speed (km/h)",
+       y = "Fire Spread Rate (m/min)") +
+  theme_minimal()
+```
+From our output, we can see a weak relationship between wind_speed and fire_spread_rate. as suggested by our correlation statistics.
+
+To determine whether the assumptions of independency and normality are met, we can plot the residual and QQ plots.
+
+```{r}
+#Residual plot
+plot(fire_no_neg_model, which =1)
+```
+```{r}
+#QQ-plot
+plot(fire_no_neg_model, which =2)
+```
+For our residual plot we see a large cluster of points on the upper left side of the figure, as well as some outliers.  For our QQ plot, we see that the points stray off far from the line towards the right side of the figure.  Based on these observation, we can suggest that both assumptions of independency and normality of residuals fails.
+
+By failing both of these assumptions, it suggests issues in our model that can lead to unreliable results.  Some potential solutions are to transform the data, or to include interaction terms.
+
+### Question 2 - What is the Relationship Between Temperature and Fire Spread Rate
+
+In this project, we explored the relationship between temperature and fire spread rate in Canada. We visualized the distribution of fire spread rate and temperature, calculated the correlation coefficient, performed a linear regression analysis, and conducted a hypothesis test to determine whether the observed relationship is statistically significant. Additionally, we created a geospatial representation of fire spread rate along with temperature to better understand the spatial patterns and relationships between these variables.
+
+The results of the hypothesis test indicate whether there is a statistically significant relationship between temperature and fire spread rate.
+
+```{r}
+data=fire_data
+```
+```{r}
+# Filter out rows where Fire Spread Rate is negative
+data<- data %>%
+  filter(fire_spread_rate >= 0)
+# Create a scatter plot
+ggplot(data, aes(x = temperature, y = fire_spread_rate)) + 
+  geom_point(color = "red", size = 2) + 
+  #geom_smooth(method = "lm", se = FALSE, color = "red")
+
+ labs(title = "Relationship between Fire Spread Rate and Temperature", 
+       x = "Fire Spread Rate", 
+       y = "Temperature") + 
+  theme_classic()
+```
+
+## EDA
+
+```{r}
+# Check the structure of the data
+str(data)
+
+# View unique values in Temperature and FireSpreadRate
+unique(data$temperature)
+unique(data$fire_spread_rate)
+```
+
+We will also look at a summary of the data
+```{r}
+summary(data$temperature)
+summary(data$fire_spread_rate)
+```
+
+```{r}
+# Plot a histogram
+ggplot(data, aes(x = fire_spread_rate)) + 
+  geom_histogram(binwidth = 1, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Fire Spread Rate", 
+       x = "Fire Spread Rate", 
+       y = "Frequency") + 
+  theme_classic()
+
+# Alternatively, plot a density plot
+ggplot(data, aes(x = fire_spread_rate)) + 
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot of Fire Spread Rate", 
+       x = "Fire Spread Rate", 
+       y = "Density") + 
+  theme_classic()
+```
+
+```{r}
+# Calculate skewness
+spread_rate_skewness <- skewness(data$fire_spread_rate)
+print(paste("Skewness of Fire Spread Rate:", spread_rate_skewness))
+```
+
+The value 11.22 suggests that the distribution of fire spread rates is heavily skewed to the right, meaning that most of the fire spread rates are relatively low, but there are a few extremely high values (outliers) that pull the tail of the distribution to the right.
+
+Before performing a regression analysis, it is important to investigate the correlation between both variables.
+
+To normalize the distribution of the fire spread rate we can attempt a log transformation
+```{r}
+# Log Transformation
+data$log_fire_spread_rate <- log(data$fire_spread_rate + 1)
+
+log_spread_rate_skewness <- skewness(data$log_fire_spread_rate)
+print(paste("Skewness of Log Transformed Fire Spread Rate:", log_spread_rate_skewness))
+
+ggplot(data, aes(x = log_fire_spread_rate)) + 
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Log Transformed Density Plot of Fire Spread Rate", 
+       x = "Log Fire Spread Rate", 
+       y = "Density") + 
+  theme_classic()
+
+```
+
+Following this, we will calculate Pearson correlation between log-transformed fire spread rate and temperature
+```{r}
+
+correlation_log <- cor(data$log_fire_spread_rate, data$temperature, use = "complete.obs")
+print(paste("Pearson correlation coefficient (Log Fire Spread Rate and Temperature):", correlation_log))
+
+```
+
+We will now rechecking correlation fire spread rate and temperature to see if the relationship has improved now.
+
+The regression model can be coded as:
+```{r}
+# Fit a linear regression model
+log_model <- lm(log_fire_spread_rate ~ temperature, data = data)
+summary(log_model)
+ggplot(data, aes(x = temperature, y = log_fire_spread_rate)) +
+  geom_point(color = "red") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Log Fire Spread Rate vs Temperature",
+       x = "Temperature", 
+       y = "Log Fire Spread Rate")
+
+```
+
+The graph shows the relationship between temperature and the rate of fire spread. The red dots represent data points where the x-axis represents the temperature and the y-axis represents the log of the fire spread rate. The blue line represents a line of best fit, indicating that there is a positive correlation between the two variables. This means that as temperature increases, the fire spread rate also increases, and this is illustrated by the upward trend of the blue line.
+
+Q-Q Plot and Residuals Plot to check the normality
+
+```{r}
+# Q-Q plot to check normality of residuals
+qqnorm(residuals(log_model))
+qqline(residuals(log_model), col = "blue")
+
+# Residuals vs Fitted plot
+plot(log_model, which = 1)
+
+# Histogram of residuals
+hist(residuals(log_model), main = "Histogram of Residuals", xlab = "Residuals", col = "lightblue")
+
+```
+
+Residual plot: This plot suggests that the linear model is not a good fit for the data, and alternative models might be considered.
+
+Q-Q Residual: This plot indicates that the data is not normally distributed because it deviates from a straight line. The points are curved and have a few outliers. The data is skewed to the right as it deviates from the straight line on the right-hand side.
+
+```{r}
+# Get model summary and extract statistics
+log_model_summary <- summary(log_model)
+r_squared_log <- log_model_summary$r.squared
+adj_r_squared_log <- log_model_summary$adj.r.squared
+p_value_log <- log_model_summary$coefficients[2, 4]
+
+print(paste("R-squared (log model):", r_squared_log))
+print(paste("Adjusted R-squared (log model):", adj_r_squared_log))
+print(paste("p-value for temperature (log model):", p_value_log))
+
+```
+
+To avoid the complexity by temperature variable Adjusted R-squared -the relationship between the temperature and fire spread rate is weak, meaning temperature does not explain much of the variation in fire spread rate.P Value suggests that the temperature is likely statistically significant, meaning it has a real effect on the dependent variable.
+
+To check this since the p-value only reflects the significance of the relationship, it's also worth considering if other variables (like humidity , wind speed , vegetation_type
+
+```{r}
+
+# Extra work--Consider including other relevant features
+data$humidity <- data$relative_humidity
+data$wind_speed <- data$wind_speed
+data$vegetation_type <- data$fuel_type
+
+# Update the model to include additional features
+model <- lm(fire_spread_rate ~ temperature + humidity + wind_speed + vegetation_type, data = data)
+
+
+
+# Summarize the updated model
+summary(model)
+
+```
+
+This thing concludes that not only one factor is responsible for the fire spread these other factors combiningly also affect that.
+
+Creating a new column according to the size_class to represnt that in the visualization as HIgh or low spread in the particular area.
+
+```{r}
+str(data)
+# Create SpreadCategory based on size_class
+data$SpreadCategory <- ifelse(data$size_class %in% c("D", "E"), "High", "Low")
+
+head(data)
+
+```
+
+Geospatial Visualization: Map the fire occurrences geographically with spread rate and temperature as visual layers
+
+```{r}
+#For the following code, the output is an HTML output, therefore exporting it in a PDF format is not possible.  If you would like to run this interactive visual please run the provided Rmarkdown file in RStudio and run the entire code. For the sake of saving, and knitting, the code has been masked with #'s.
+
+#data <- data[!is.na(data$fire_location_longitude) & !is.na(data$fire_location_latitude), ]
+# Ensure data is not NULL and has the required columns
+#if (!is.null(data) && all(c("fire_location_longitude", "fire_location_latitude", "fire_spread_rate", "SpreadCategory", "temperature") %in% names(data))) {
+  
+  # Print debugging information
+  
+  # Filter out rows with missing lat/long
+  #data <- data[!is.na(data$fire_location_longitude) & !is.na(data$fire_location_latitude), ]
+  
+  #leaflet(data) %>%
+    #addTiles() %>%
+    #addCircleMarkers(~fire_location_longitude, ~fire_location_latitude,
+                     #radius = ~fire_spread_rate * 0.1,  
+                     #color = ~ifelse(SpreadCategory == "High", "red", "green"),  
+                     #fillOpacity = 0.5,
+                     #popup = ~paste("Spread Rate:", fire_spread_rate, "<br>",
+                                    #"Temperature:", temperature)) %>%
+    #setView(lng = mean(data$fire_location_longitude, na.rm = TRUE), 
+            #lat = mean(data$fire_location_latitude, na.rm = TRUE), 
+            #zoom = 6) %>%
+    #addLegend("bottomright", 
+              #colors = c("red", "green"), 
+              #labels = c("High Spread Rate", "Low Spread Rate"), 
+              #title = "Spread Rate Category")
+#} else {
+  #print("Data is NULL or required columns are missing.")
+#}
+```
+
+Added clustering Points for Better Performance on this geospatial visualization. This will interactively shows the area where the fire spread rate and temperature is high or low.
+
+Hypothesis testing:
+
+```{r}
+# Extract the p-value for temperature in the transformed model
+p_value_log <- summary(log_model)$coefficients[2, 4]
+
+# Hypothesis testing
+if (p_value_log < 0.05) {
+  print("Reject the null hypothesis. There is a statistically significant relationship between temperature and fire spread rate (log-transformed).")
+} else {
+  print("Fail to reject the null hypothesis. There is no statistically significant relationship between temperature and fire spread rate (log-transformed).")
+}
+
+# Print p-value for confirmation
+print(paste("P-value:", p_value_log))
+```
+
+There is a statistically significant relationship between temperature and fire spread rate (log-transformed).
+
+The analysis of the residual plot and Q-Q residual plot suggests that the linear regression model is not an appropriate fit for the data. The residual plot indicates a poor linear relationship, and the Q-Q residual plot reveals that the data is not normally distributed, with a right-skew and the presence of outliers. Given these observations, alternative modeling approaches, such as non-linear regression or robust regression techniques, should be considered to better capture the underlying patterns in the data and avoid the reliance on normality assumptions.
+
+### Question 3 - What is the Relationship Between Fire Size to Response and Extinguished Time
+
+### Introduction
+Analyze the relationship between the Fire Size against the Response /Extinguished Time
+
+### Response Time
+Duration between the detection of a forest fire and the arrival of firefighting resources at the scene.
+
+### Extinguished Time
+Duration between the detection of a forest fire the moment when the fire is completely put out and no longer poses a threat.
+
+### Data Cleaning and Transformation
+
+### Reading the file and converting the blank into NA
+
+```{r}
+data1=fire_data
+```
+
+### Step 1: Identifying the targetted Variable:
+
+Below are the list of variables which we are focusing to continue our statistical analysis for this problem statement
+
+- Fire_Size ( in Hectares)
+- fire_start_date 
+- discovered date
+- ex_fs_date -(Extinguished time)
+- assessment_datetime-(Actual Response Starts)
+
+
+### Step 2: Mapping the NA assessment_datetime,ex_fs_date
+
+Identified the blank dates with the next earliest date for fire_start_date with Discovered_date, assessment date with the arrival date in the fire control date,bh_fs_date. Main Objective of this transformation is not to eliminate the data which will be really supporting our regression
+
+
+```{r}
+data2 <- data1 %>% 
+   mutate(discovered_date = ifelse(discovered_date == 'NA', reported_date, discovered_date),
+          ex_fs_date = ifelse(ex_fs_date == 'NA', bh_fs_date, ex_fs_date),
+          fire_start_date = ifelse(fire_start_date == 'NA', discovered_date, fire_start_date),
+          assessment_datetime = ifelse(assessment_datetime == 'NA', ia_arrival_at_fire_date, assessment_datetime),
+          discovered_date = ifelse(is.na(discovered_date), reported_date, discovered_date),
+          ex_fs_date = ifelse(is.na(ex_fs_date), bh_fs_date, ex_fs_date),
+          fire_start_date = ifelse(is.na(fire_start_date), discovered_date, fire_start_date),
+          assessment_datetime = ifelse(is.na(assessment_datetime), ia_arrival_at_fire_date, assessment_datetime))
+```
+
+### Step 3: Converting the date variables into date format
+
+```{r}
+data2$ex_fs_date <- as.POSIXct(data2$ex_fs_date, format = "%Y-%m-%d %H:%M", tz = "America/Edmonton")
+data2$discovered_date <- as.POSIXct(data2$discovered_date, format = "%Y-%m-%d %H:%M", tz = "America/Edmonton")
+data2$fire_start_date <- as.POSIXct(data2$fire_start_date, format = "%Y-%m-%d %H:%M", tz = "America/Edmonton")
+data2$assessment_datetime <- as.POSIXct(data2$assessment_datetime, format = "%Y-%m-%d %H:%M", tz = "America/Edmonton")
+# Check the classes after conversion
+class(data2$ex_fs_date)
+class(data2$fire_start_date)
+```
+
+### Step 4: Calculating the response and extinguished time in minutes
+
+- Responsetime = assessment_datetime-fire_start_date
+- Exttime= ex_fs_date-fire_start_date
+
+```{r}
+# Calculate response time and ext time in minutes
+data2$Responsetime <- as.numeric(difftime(data2$assessment_datetime, data2$fire_start_date, units = "mins"))
+data2$Exttime <- as.numeric(difftime(data2$ex_fs_date, data2$fire_start_date, units = "mins"))
+```
+
+### Step 5: Logarthimic Transformation
+
+- Performed a log linear transformation on the dependent variables(current_size,Responsetime,Exttime)
+
+```{r}
+data2$current_size=log10(data2$current_size)
+data2$Responsetime=log10(data2$Responsetime)
+data2$Exttime=log10(data2$Exttime)
+```
+
+### Step 6: Filtering Variables
+
+-Filtering Out the required variables to continue with the further regression analysis of the size and the times which we are targetting to produce the correlation.`
+
+```{r}
+data_filtered<- data2 %>%
+  select(fire_number, fire_year, current_size, Responsetime, Exttime)
+head(data_filtered)
+```
+
+### Step 6: Calulating the mean response time and extinguished time
+
+- To continue analysis of the newly derived variables and conducting analysis, we performed grouping the time with respect to the affected size and storing it into different data frames
+- result1 - (Response Time)
+- result2 - (Extinguished Time)
+
+Below are the cleaned data set which are going to be in our further regression Analysis
+
+
+```{r}
+
+result1 <- data2 %>%
+  group_by(current_size) %>%
+  summarise(
+    meanresponsetime = mean(Responsetime),
+  )
+
+result1 <- result1 %>%
+  filter(!is.na(meanresponsetime), !is.infinite(meanresponsetime),
+         !is.na(current_size), !is.infinite(current_size))
+
+
+result2 <- data2 %>%
+  group_by(current_size) %>%
+  summarise(
+    meanExttime = mean(Exttime),
+  )%>%
+  arrange(meanExttime)
+
+result2 <- result2 %>%
+  filter(!is.na(meanExttime), !is.infinite(meanExttime),
+         !is.na(current_size), !is.infinite(current_size))
+cat("Data Frame for Response Time")
+
+head(result1)
+summary(result1)
+cat(".\n")
+cat("Data Frame for Extinquished Time")
+head(result2)
+summary(result2)
+```
+
+### Regression Analysis
+
+### Plotted the scattered plots to validate the density of the variables being analyzed
+
+```{r}
+ggplot1= (ggplot(result1, aes(x=meanresponsetime, y = current_size))+
+  geom_point (color = "red") +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth")+
+  labs (title = "Scatter plot of Average Response Time and current_size",
+        x = "Response Time", y ="Average current_size"))
+ggplot1
+```
+
+### Inference:
+-Positive linear trend. Response time increases, the current size also slightly increases, though the relationship seems weak (the slope of the line is small).
+
+-Data points (in red) are densely scattered, with many points clustering around lower response times and a current size. However, there are a few points that deviate significantly from this dense cluster, especially for higher response times and current sizes.
+
+```{r}
+ggplot2 =(ggplot(result2, aes(x=meanExttime, y = current_size))+
+  geom_point (color = "red") +
+  stat_smooth(method = "lm", formula = y ~ x, geom = "smooth")+
+  labs (title = "Scatter plot of Average Extinguished time and Average current_size",
+        x = "Extinguished time", y ="Average current_size"))
+ggplot2
+```
+### *Inference:*
+
+-Strong Positive Trend
+-Slope of the line is noticeably steeper compared to the response time plot, indicating that changes in extinguished time have a more pronounced effect on the average current size.
+
+
+
+### Generating Models and Intreprating the Model Summary with Hypothesis Test
+
+### Mean Response Time
+
+-Null Hypothesis (H0): There is no relationship between the Response time and Average current_size.
+-Alternative Hypothesis (Ha): There is a relationship between the Response time and Average current_size.
+
+```{r}
+model_clean1 = lm(current_size ~ meanresponsetime, data = result1)
+summary(model_clean1)
+```
+
+### Interpretation: 
+p-value of 0.03388 relationship between meanresponsetime and current_size is statistically significant at the 5% significance level (p < 0.05)
+
+### Model Fit: 
+R-squared value of 0.002388 indicates a Low Fit.
+
+
+
+### Extinquished Time
+
+-Null Hypothesis (H0): There is no relationship between the Extinguished time and Average current_size.
+-Alternative Hypothesis (Ha): There is a relationship between the Extinguished time and Average current_size.
+
+```{r}
+model_clean2 = lm(current_size ~ meanExttime, data = result2)
+summary(model_clean2)
+```
+
+
+### Interpretation:
+p-value of 2.2e-16  is extremely low, indicating strong evidence against the null hypothesis means that Response time has significant effect on the Size of the forest impact
+
+### Model Fit:  
+R-squared: 0.5373 of the variance in current_size which indicates a moderate fit
+
+
+
+### Analyzing the Normal Distribution - QQ Plot for Response Time
+
+```{r}
+qqnorm(model_clean1$residuals)
+qqline(model_clean1$residuals, col = "red")
+```
+### Interpretation: 
+- Model appears to follow a normal distribution reasonably well. 
+- Some deviations at the extreme ends (in the tails) may indicate slight departures from normality, possibly showing mild outliers or heavier tails than a normal distribution
+
+
+
+### Analyzing the Normal Distribution - QQ Plot for Extinquished Time
+
+```{r}
+qqnorm(model_clean2$residuals)
+qqline(model_clean2$residuals, col = "red")
+```
+
+### Interpretation:
+
+- Model is approximately normal
+- Model may have heavier tails or more extreme values than would be expected in a normal distribution- When the extinguished time increases there will be huge impact on the affected area
+
+
+### Analyzing the Normal Distribution - Residual Plot for Response Time
+
+```{r}
+plot(model_clean1$fitted.values, model_clean1$residuals)
+abline(h = 0, col = "red")
+```
+### Inference:
+-Residuals seem to be randomly scattered around the horizontal line at zero though there are many outliers in the data set
+
+
+
+### Analyzing the Normal Distribution - Residual Plot for Extinguished Time
+
+```{r}
+plot(model_clean2$fitted.values, model_clean2$residuals)
+abline(h = 0, col = "red")
+```
+### Inference:
+-Residuals are centered around zero, which is a good sign for a well-fitted model and  shows the strong relationship between time and size
+
+### Conclusion
+
+-Overall, Models of Response and Extinguished time has a significant relationship between the affected area - size.
+
+-However, the Extinguished Time Model which shows the strong relationship with the relatively low p-value
+
+-Hence improving the Response and extinguished time of a forest fire involving with following strategies ideally impact the size of the forest being affected
+
+-Early detection,Rapid response,Effective firefighting techniques,Training and Coordination & Public awareness
+
+### Question 4 - Does Fire Size Relate To The Weather Conditions When The Fire Starts
+
+The relationship I will be investigating is if there a potential relationship between the recorded fires size once under control and the weather that was present during the fires start. I will have uc_hectares as my dependent variable and I will use a multivariable regression with the temperature, relative humidity, and wind speed as the independent variables.
+```{r}
+#assign initial dataset to a new dataset, to prevent errors with preexisting code for the other questions
+data1=fire_data
+```
+
+### EDA
+```{r}
+head(data1)
+```
+Based off of the potential relationship I wish to investigate I will create a new data frame with the columns of interest.
+
+```{r}
+reg_df=data.frame(uc_hectares=data1$uc_hectares,temperature=data1$temperature,relative_humidity=data1$relative_humidity,wind_speed=data1$wind_speed)
+summary(reg_df)
+```
+Based off of the summary stats the dependent variable uc_hectares seems to be strongly skewed. To explore the data I will create histograms to display the data's distributuion.
+
+```{r}
+ggplot(data = reg_df, aes(x = uc_hectares)) +
+  geom_histogram(color='blue')
+ggplot(data = reg_df, aes(x = temperature)) +
+  geom_histogram(color='blue')
+ggplot(data = reg_df, aes(x = relative_humidity)) +
+  geom_histogram(color='blue')
+ggplot(data = reg_df, aes(x = wind_speed)) +
+  geom_histogram(color='blue')
+```
+Unsurprisingly the distribution of the uc_hectares variable is greatly skewed confirming what could be seen in the summary statistics. 
+
+### Regression Analysis
+```{r}
+reglarge=lm(formula=reg_df$uc_hectares~reg_df$temperature+reg_df$relative_humidity+reg_df$wind_speed)
+summary(reglarge)
+
+```
+To start I'll state the hypothesis test for all coefficients,
+H0: B=0 The coefficient in question is not statistically significant from 0
+H1: B!=0 The coefficient is statistically significant from 0
+
+The intercept is -279.8 hectares if all other variables are 0 which does not make sense and it is unsurprisingly not significant with a P value of 0.22 so we cannot reject the null hypothesis. The coefficient for temperature, 23.5 hectares per degree increase in temperature has a P value of 0.00088 allowing us to state that is significant and we can reject the null hypothesis. The coefficient for relative humidity is -5.44 hectares per %increase in humidity, with a P value of 0.062 the coefficient is not significant at the 5% level but is close. Under the stated hypothesis test we cannot reject the null hypothesis. Lastly The coefficient for wind speed is 42.5 hectares burned per 1 kilometer per hour increase. With a P value of near 0 the coefficient is significant and we can reject the null hypothesis. 
+
+With an adj R-squared of 0.003055 indicating the regression only explains 0.32% of variation in uc_hectares is explained by this model, this indicates that the estimated model is likely a very poor fit for the data.  
+
+```{r}
+reg_cor= round(cor(reg_df,use = "complete.obs"), 2)
+reg_cor
+```
+From the correlation matrix we can see that there is very little correlation between uc_hectares and any of the independent variables. To better visualize this I will create scatter plots with estimated models for each independent variable and uc_hectares as visualizing a multivariate regression model is difficult.
+
+```{r}
+ggplot(reg_df, aes(x=temperature, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_df, aes(x=relative_humidity, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_df, aes(x=wind_speed, y=uc_hectares)) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+```
+```{r}
+plot(lm(formula=data1$uc_hectares~data1$temperature+data1$relative_humidity+data1$wind_speed))
+```
+The plots above show that the residuals are not independent or normally distributed. The first plot shows that there are some large outliers in the data and the normality plot also shows that the the residuals are not normally distributed. This indicates that the model is likely unreliable. A log log transformation could perhaps improve this somewhat.
+
+
+```{r}
+
+reg_dflog=data.frame(uc_hectares=log10(data1$uc_hectares),temperature=data1$temperature,relative_humidity=data1$relative_humidity,wind_speed=data1$wind_speed)
+
+reglog=lm(formula=reg_dflog$uc_hectares~reg_dflog$temperature+reg_dflog$relative_humidity+reg_dflog$wind_speed)
+summary(reglog)
+```
+
+Transforming the data in log format did improve the regression and the P values of all coefficients are below 0.05 allowing us to state that all 3 coefficients significant along with the intercept but still does not make sense in the context of the data. With an adj R-squared of 0.083 the fit of the model does improve in this case drastically from the first model.  
+
+```{r}
+ggplot(reg_dflog, aes(x=temperature, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_dflog, aes(x=relative_humidity, y=uc_hectares )) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+ggplot(reg_dflog, aes(x=wind_speed, y=uc_hectares)) + 
+  geom_point(color = "red") + stat_smooth(method = "lm", 
+                                          formula = y ~ x, geom = "smooth")
+reg_corlog= round(cor(reg_dflog,use = "complete.obs"), 2)
+reg_corlog
+```
+With the fire size transformed into log form the data shows slightly more of a linear relationship. Additionally, the correlation matrix shows an improved correlation between the independent and dependent variables.
+
+```{r}
+plot(lm(formula=reg_dflog$uc_hectares~reg_dflog$temperature+reg_dflog$relative_humidity+reg_dflog$wind_speed))
+```
+While still not independent or normally distributed it is still a large improvement on the original model with the untransformed data.
+
+Overall the model with the total dataset does not fit the data well and the visualizations showed that there was almost no linear relationship between the variables and the fire size. However, once the fire size data is transformed so the model is in log linear format the model and the visualizations showed a much better relationship between the weather and fire size. With the size of the dataset and other variables available perhaps a larger or non linear model could be built to better fit the fire size data but given the regressions above temperature, wind speed, and relative humidity alone are not enough to sufficiently explain the data while there is at least something of a relationship between them.  
+
+## Conclusion
+
+Both questions investigating potential determinants of fire spread rates did have significant coefficients their R-squared values were low. The model looking at the relationship between fire size, response, and extinguished time did have significant coefficients and did show a good linear relationship between fire size and time to extinguishment time. The multivariable model looking at if weather conditions can predict fire size did show a linear relationship in the variables that were all significant, but the R-squared value was also low.
+
+Overall, many of our results came down to the fact that the skewed nature of much of the data affected our linear model's ability to fit the data. Even with transformations and slightly larger multivariable models they were not sufficient. Perhaps a more comprehensive model containing more of the dataset's variables or perhaps a non-linear model may fit the data better.
+
+## References
+1. Friedman, E. S., Kauffman, M. J., Burch, J. W., & Cottam, R. (2019). Trends in conifer regeneration following disturbance in a high-elevation forest: Implications for forest management and restoration. Canadian Journal of Forest Research, 49(5), 502-511. https://doi.org/10.1139/cjfr-2018-0293
+
+2. Government of Alberta. (n.d.). Wildfire data [Data set]. Open Alberta. https://open.alberta.ca/opendata/wildfire-data#summary
