@@ -1,0 +1,248 @@
+---
+title: "FireSpreadvsTemp"
+author: "Harpreet"
+date: "2024-10-07"
+output: pdf_document
+---
+
+Question 2:
+
+:   **What is the Relationship Between Temperature and Fire Spread Rate**​.
+
+:   **In this project, we explored the relationship between temperature and fire spread rate in Canada. We visualized the distribution of fire spread rate and temperature, calculated the correlation coefficient, performed a linear regression analysis, and conducted a hypothesis test to determine whether the observed relationship is statistically significant. Additionally, we created a geospatial representation of fire spread rate along with temperature to better understand the spatial patterns and relationships between these variables.**
+
+:   **The results of the hypothesis test indicate whether there is a statistically significant relationship between temperature and fire spread rate.**
+
+```{r}
+## Load dataset
+data<- read.csv(file.choose(),header=T, na.strings = c("","NA"))
+```
+
+```{r}
+# Load the ggplot2 library
+library(ggplot2)
+# Filter out rows where Fire Spread Rate is negative
+data<- data %>%
+  filter(fire_spread_rate >= 0)
+# Create a scatter plot
+ggplot(data, aes(x = temperature, y = fire_spread_rate)) + 
+  geom_point(color = "red", size = 2) + 
+  #geom_smooth(method = "lm", se = FALSE, color = "red")
+
+ labs(title = "Relationship between Fire Spread Rate and Temperature", 
+       x = "Fire Spread Rate", 
+       y = "Temperature") + 
+  theme_classic()
+
+```
+
+# EDA
+
+```{r}
+# Check the structure of the data
+str(data)
+
+# View unique values in Temperature and FireSpreadRate
+unique(data$temperature)
+unique(data$fire_spread_rate)
+
+```
+
+#### This will give overview of both variable
+
+```{r}
+summary(data$temperature)
+summary(data$fire_spread_rate)
+
+```
+
+```{r}
+# Plot a histogram
+ggplot(data, aes(x = fire_spread_rate)) + 
+  geom_histogram(binwidth = 1, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Fire Spread Rate", 
+       x = "Fire Spread Rate", 
+       y = "Frequency") + 
+  theme_classic()
+
+# Alternatively, plot a density plot
+ggplot(data, aes(x = fire_spread_rate)) + 
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot of Fire Spread Rate", 
+       x = "Fire Spread Rate", 
+       y = "Density") + 
+  theme_classic()
+
+```
+
+```{r}
+
+library(e1071)
+
+# Calculate skewness
+spread_rate_skewness <- skewness(data$fire_spread_rate)
+print(paste("Skewness of Fire Spread Rate:", spread_rate_skewness))
+
+```
+
+#### The value 11.22 suggests that the distribution of fire spread rates is heavily skewed to the right, meaning that most of the fire spread rates are relatively low, but there are a few extremely high values (outliers) that pull the tail of the distribution to the right.
+
+#### Before performing a regression analysis, it is important to investigate the correlation between both variables.
+
+## To normalize the distribution of the fire spread rate- Log transformation
+
+```{r}
+# Log Transformation
+data$log_fire_spread_rate <- log(data$fire_spread_rate + 1)
+
+log_spread_rate_skewness <- skewness(data$log_fire_spread_rate)
+print(paste("Skewness of Log Transformed Fire Spread Rate:", log_spread_rate_skewness))
+
+ggplot(data, aes(x = log_fire_spread_rate)) + 
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Log Transformed Density Plot of Fire Spread Rate", 
+       x = "Log Fire Spread Rate", 
+       y = "Density") + 
+  theme_classic()
+
+```
+
+### Calculate Pearson correlation between log-transformed fire spread rate and temperature
+
+```{r}
+
+correlation_log <- cor(data$log_fire_spread_rate, data$temperature, use = "complete.obs")
+print(paste("Pearson correlation coefficient (Log Fire Spread Rate and Temperature):", correlation_log))
+
+```
+
+#### Rechecking correlation fire spread rate and temperature to see if the relationship has improved now.
+
+### Regression Model
+
+```{r}
+# Fit a linear regression model
+log_model <- lm(log_fire_spread_rate ~ temperature, data = data)
+summary(log_model)
+ggplot(data, aes(x = temperature, y = log_fire_spread_rate)) +
+  geom_point(color = "red") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Log Fire Spread Rate vs Temperature",
+       x = "Temperature", 
+       y = "Log Fire Spread Rate")
+
+```
+
+#### The graph shows the relationship between temperature and the rate of fire spread. The red dots represent data points where the x-axis represents the temperature and the y-axis represents the log of the fire spread rate. The blue line represents a line of best fit, indicating that there is a positive correlation between the two variables. This means that as temperature increases, the fire spread rate also increases, and this is illustrated by the upward trend of the blue line.
+
+## Q-Q Plot and Residuals Plot to check the normality
+
+```{r}
+# Q-Q plot to check normality of residuals
+qqnorm(residuals(log_model))
+qqline(residuals(log_model), col = "blue")
+
+# Residuals vs Fitted plot
+plot(log_model, which = 1)
+
+# Histogram of residuals
+hist(residuals(log_model), main = "Histogram of Residuals", xlab = "Residuals", col = "lightblue")
+
+```
+
+#### Residual plot: This plot suggests that the linear model is not a good fit for the data, and alternative models might be considered.
+
+#### Q-Q Residual: This plot indicates that the data is not normally distributed because it deviates from a straight line. The points are curved and have a few outliers. The data is skewed to the right as it deviates from the straight line on the right-hand side.
+
+```{r}
+# Get model summary and extract statistics
+log_model_summary <- summary(log_model)
+r_squared_log <- log_model_summary$r.squared
+adj_r_squared_log <- log_model_summary$adj.r.squared
+p_value_log <- log_model_summary$coefficients[2, 4]
+
+print(paste("R-squared (log model):", r_squared_log))
+print(paste("Adjusted R-squared (log model):", adj_r_squared_log))
+print(paste("p-value for temperature (log model):", p_value_log))
+
+```
+
+#### To avoid the complexity by temperature variable Adjusted R-squared -the relationship between the temperature and fire spread rate is weak, meaning temperature does not explain much of the variation in fire spread rate.P Value suggests that the temperature is likely statistically significant, meaning it has a real effect on the dependent variable.
+
+#### To check this since the p-value only reflects the significance of the relationship, it's also worth considering if other variables (like humidity , wind speed , vegetation_type
+
+```{r}
+
+# Extra work--Consider including other relevant features
+data$humidity <- data$relative_humidity
+data$wind_speed <- data$wind_speed
+data$vegetation_type <- data$fuel_type
+
+# Update the model to include additional features
+model <- lm(fire_spread_rate ~ temperature + humidity + wind_speed + vegetation_type, data = data)
+
+
+
+# Summarize the updated model
+summary(model)
+
+```
+
+#### This thing concludes that not only one factor is responsible for the fire spread these other factors combiningly also affect that.
+
+#### Creating a new column according to the size_class to represnt that in the visualization as HIgh or low spread in the particular area.
+
+```{r}
+str(data)
+# Create SpreadCategory based on size_class
+data$SpreadCategory <- ifelse(data$size_class %in% c("D", "E"), "High", "Low")
+
+head(data)
+
+```
+
+### Geospatial Visualization: Map the fire occurrences geographically with spread rate and temperature as visual layers
+
+```{r}
+
+library(leaflet)
+leaflet(data) %>%
+  addTiles() %>%
+  addCircleMarkers(~fire_location_longitude, ~fire_location_latitude,
+                   radius = ~fire_spread_rate * 0.1,  
+                   color = ~ifelse(SpreadCategory == "High", "red", "green"),  
+                   fillOpacity = 0.5,
+                   popup = ~paste("Spread Rate:", fire_spread_rate, "<br>",
+                                  "Temperature:", temperature)) %>%
+  setView(lng = mean(data$fire_location_longitude, na.rm = TRUE), lat = mean(data$fire_location_latitude, na.rm = TRUE), zoom = 6) %>%
+  addLegend("bottomright", 
+            colors = c("red", "green"), 
+            labels = c("High Spread Rate", "Low Spread Rate"), 
+            title = "Spread Rate Category")
+
+```
+
+#### Added clustering Points for Better Performance on this geospatial visualization. This will interactively shows the area where the fire spread rate and temperature is high or low.
+
+## Hypothesis testing.
+
+```{r}
+# Extract the p-value for temperature in the transformed model
+p_value_log <- summary(log_model)$coefficients[2, 4]
+
+# Hypothesis testing
+if (p_value_log < 0.05) {
+  print("Reject the null hypothesis. There is a statistically significant relationship between temperature and fire spread rate (log-transformed).")
+} else {
+  print("Fail to reject the null hypothesis. There is no statistically significant relationship between temperature and fire spread rate (log-transformed).")
+}
+
+# Print p-value for confirmation
+print(paste("P-value:", p_value_log))
+```
+
+#### There is a statistically significant relationship between temperature and fire spread rate (log-transformed).
+
+## Conclusion:
+
+#### The analysis of the residual plot and Q-Q residual plot suggests that the linear regression model is not an appropriate fit for the data. The residual plot indicates a poor linear relationship, and the Q-Q residual plot reveals that the data is not normally distributed, with a right-skew and the presence of outliers. Given these observations, alternative modeling approaches, such as non-linear regression or robust regression techniques, should be considered to better capture the underlying patterns in the data and avoid the reliance on normality assumptions.
